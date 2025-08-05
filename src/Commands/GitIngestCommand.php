@@ -4,7 +4,7 @@ namespace Ihasan\LaravelGitingest\Commands;
 
 use Illuminate\Console\Command;
 
-class LaravelGitingestCommand extends Command
+class GitIngestCommand extends Command
 {
     public $signature = 'laravel-gitingest';
 
@@ -16,4 +16,4 @@ class LaravelGitingestCommand extends Command
 
         return self::SUCCESS;
     }
-}
+} 

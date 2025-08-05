@@ -1,25 +1,31 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Ihasan\LaravelGitingest;
 
-use Ihasan\LaravelGitingest\Commands\LaravelGitingestCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
+use Ihasan\LaravelGitingest\Commands\GitIngestCommand;
 
-class LaravelGitingestServiceProvider extends PackageServiceProvider
+final class LaravelGitingestServiceProvider extends PackageServiceProvider
 {
     public function configurePackage(Package $package): void
     {
-        /*
-         * This class is a Package Service Provider
-         *
-         * More info: https://github.com/spatie/laravel-package-tools
-         */
         $package
             ->name('laravel-gitingest')
             ->hasConfigFile()
-            ->hasViews()
-            ->hasMigration('create_laravel_gitingest_table')
-            ->hasCommand(LaravelGitingestCommand::class);
+            ->hasCommand(GitIngestCommand::class);
+    }
+
+    public function packageRegistered(): void
+    {
+        // Register core services here
+        $this->registerCoreServices();
+    }
+
+    private function registerCoreServices(): void
+    {
+        // Service registrations will be added in later steps
     }
 }
