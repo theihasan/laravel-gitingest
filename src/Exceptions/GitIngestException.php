@@ -8,16 +8,18 @@ use Exception;
 
 class GitIngestException extends Exception
 {
-    protected array $context = [];
-
-    public function setContext(array $context): self
+    public static function processingFailed(string $repository, string $reason): self
     {
-        $this->context = $context;
-        return $this;
+        return new self("Failed to process repository '{$repository}': {$reason}");
     }
 
-    public function getContext(): array
+    public static function invalidRepository(string $repository): self
     {
-        return $this->context;
+        return new self("Invalid repository URL or format: {$repository}");
+    }
+
+    public static function configurationError(string $message): self
+    {
+        return new self("Configuration error: {$message}");
     }
 }
