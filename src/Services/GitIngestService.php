@@ -16,6 +16,11 @@ use Ihasan\LaravelGitingest\Services\Optimizers\ContentOptimizer;
 use Ihasan\LaravelGitingest\Exceptions\GitIngestException;
 use Ihasan\LaravelGitingest\Exceptions\DownloadException;
 use Ihasan\LaravelGitingest\Exceptions\ProcessingException;
+use Ihasan\LaravelGitingest\DataObjects\ProcessingResult;
+use Ihasan\LaravelGitingest\DataObjects\TokenStatistics;
+use Ihasan\LaravelGitingest\DataObjects\FileStatistics;
+use Ihasan\LaravelGitingest\DataObjects\ProcessingMetadata;
+use Ihasan\LaravelGitingest\DataObjects\ChunkResult;
 use React\EventLoop\LoopInterface;
 use React\Promise\PromiseInterface;
 use Throwable;
@@ -41,7 +46,7 @@ final class GitIngestService
     public function processRepository(
         string $repositoryUrl,
         array $options = []
-    ): array {
+    ): ProcessingResult {
         try {
             $this->emitProgress('starting', 0, 'Starting repository processing');
             
@@ -100,57 +105,89 @@ final class GitIngestService
         return $this;
     }
 
-    private function executeProcessingPipeline(string $repositoryUrl, array $options): array
+    private function executeProcessingPipeline(string $repositoryUrl, array $options): ProcessingResult
     {
-        // Step 1: Download repository
-        $this->emitProgress('downloading', 10, 'Downloading repository');
-        $downloader = $this->selectDownloader($options);
-        $zipPath = $downloader->download($repositoryUrl, $options);
-
+        $startTime = microtime(true);
+        
         try {
-            // Step 2: Extract ZIP
+            $this->emitProgress('downloading', 10, 'Downloading repository');
+            $downloader = $this->selectDownloader($options);
+            $zipPath = $downloader->download($repositoryUrl, $options);
             $this->emitProgress('extracting', 20, 'Extracting repository contents');
-            $extractedPath = $this->zipProcessor->extractZip($zipPath);
+            $extractPromise = $this->zipProcessor->extractAndProcess($zipPath, $options);
+            
+            $extractPromise->then(function($extractedFiles) use (&$files) {
+                $files = $extractedFiles;
+            });
+            
+            $this->eventLoop->run();
 
-            // Step 3: Filter files
+           
             $this->emitProgress('filtering', 30, 'Filtering repository files');
-            $files = $this->fileFilter->filterFiles($extractedPath, $options['filter'] ?? []);
+            if (isset($options['filter']) && !empty($options['filter'])) {
+                $filteredFiles = $this->fileFilter->filterFiles($files, $options['filter']);
+                $files = $filteredFiles;
+            }
 
-            // Step 4: Process content
             $this->emitProgress('processing', 50, 'Processing file contents');
-            $processedContent = $this->contentProcessor->processFiles($files, $options['format'] ?? []);
+            $content = $files->mapWithKeys(function($fileData, $path) {
+                return [$path => [
+                    'content' => $fileData['content'] ?? '',
+                    'path' => $path,
+                    'size' => strlen($fileData['content'] ?? ''),
+                ]];
+            })->toArray();
 
-            // Step 5: Count tokens
             $this->emitProgress('counting_tokens', 60, 'Counting tokens');
-            $tokenStats = $this->calculateTokenStatistics($processedContent, $options);
+            $tokenStats = $this->calculateTokenStatistics($content, $options);
 
-            // Step 6: Optimize content if needed
-            $optimizedContent = $processedContent;
+            $optimizedContent = $content;
+            $wasOptimized = false;
             if ($this->shouldOptimize($tokenStats, $options)) {
                 $this->emitProgress('optimizing', 70, 'Optimizing content');
                 $optimizedContent = $this->contentOptimizer->optimizeFiles(
-                    $processedContent, 
+                    $content, 
                     $options['optimization'] ?? []
                 );
+                $wasOptimized = true;
             }
 
-            // Step 7: Chunk content if needed
             $chunks = null;
             if ($this->shouldChunk($tokenStats, $options)) {
                 $this->emitProgress('chunking', 80, 'Chunking content');
-                $chunks = $this->contentChunker->chunkRepository(
+                $chunkResults = $this->contentChunker->chunkRepository(
                     $optimizedContent,
                     $options['chunking'] ?? []
                 );
+                
+                // Convert chunk results to ChunkResult DTOs
+                $chunks = collect($chunkResults)->map(function($chunk, $index) {
+                    return ChunkResult::create(
+                        chunkId: $index,
+                        content: $chunk['content'] ?? '',
+                        tokens: $chunk['tokens'] ?? 0,
+                        files: collect($chunk['files'] ?? []),
+                        strategy: 'semantic',
+                        navigation: $chunk['navigation'] ?? [],
+                        metadata: $chunk['metadata'] ?? [],
+                    );
+                });
             }
 
-            // Step 8: Generate final result
             $this->emitProgress('finalizing', 90, 'Finalizing results');
-            return $this->buildResult($optimizedContent, $tokenStats, $chunks, $options);
+            return $this->buildResult(
+                repositoryUrl: $repositoryUrl,
+                content: $optimizedContent,
+                tokenStats: $tokenStats,
+                chunks: $chunks,
+                options: $options,
+                wasOptimized: $wasOptimized,
+                startTime: $startTime,
+            );
 
         } finally {
             // Cleanup temporary files
-            $this->cleanup($zipPath, $extractedPath ?? null);
+            $this->cleanup($zipPath ?? null, null);
         }
     }
 
@@ -161,82 +198,89 @@ final class GitIngestService
             : $this->publicDownloader;
     }
 
-    private function calculateTokenStatistics(array $content, array $options): array
+    private function calculateTokenStatistics(array $content, array $options): TokenStatistics
     {
         $model = $options['model'] ?? config('gitingest.default_model', 'gpt-4');
         $totalTokens = 0;
-        $fileStats = [];
+        $fileStatsCollection = collect();
 
         foreach ($content as $path => $fileData) {
             $tokens = $this->tokenCounter->countTokens($fileData['content'], $model);
             $totalTokens += $tokens;
-            $fileStats[$path] = [
-                'tokens' => $tokens,
-                'size' => strlen($fileData['content']),
-                'lines' => substr_count($fileData['content'], "\n") + 1,
-            ];
+            
+            $fileStats = new FileStatistics(
+                path: $path,
+                tokens: $tokens,
+                size: strlen($fileData['content']),
+                lines: substr_count($fileData['content'], "\n") + 1,
+                extension: pathinfo($path, PATHINFO_EXTENSION),
+            );
+            
+            $fileStatsCollection->push($fileStats);
         }
 
-        return [
-            'total_tokens' => $totalTokens,
-            'total_files' => count($content),
-            'model' => $model,
-            'file_stats' => $fileStats,
-            'model_limit' => $this->tokenCounter->getModelLimit($model),
-            'exceeds_limit' => $totalTokens > $this->tokenCounter->getModelLimit($model),
-        ];
+        $modelLimit = match ($model) {
+            'gpt-4', 'gpt-4-turbo' => 128_000,
+            'claude-3-opus', 'claude-3-sonnet' => 200_000,
+            'gpt-3.5-turbo' => 16_385,
+            default => 100_000,
+        };
+
+        return TokenStatistics::create(
+            totalTokens: $totalTokens,
+            totalFiles: count($content),
+            model: $model,
+            modelLimit: $modelLimit,
+            fileStats: $fileStatsCollection,
+        );
     }
 
-    private function shouldOptimize(array $tokenStats, array $options): bool
+    private function shouldOptimize(TokenStatistics $tokenStats, array $options): bool
     {
         if (isset($options['optimization']['enabled'])) {
             return $options['optimization']['enabled'];
         }
 
         // Auto-optimize if content exceeds 75% of model limit
-        $threshold = $tokenStats['model_limit'] * 0.75;
-        return $tokenStats['total_tokens'] > $threshold;
+        $threshold = $tokenStats->modelLimit * 0.75;
+        return $tokenStats->totalTokens > $threshold;
     }
 
-    private function shouldChunk(array $tokenStats, array $options): bool
+    private function shouldChunk(TokenStatistics $tokenStats, array $options): bool
     {
         if (isset($options['chunking']['enabled'])) {
             return $options['chunking']['enabled'];
         }
 
         // Auto-chunk if content exceeds model limit
-        return $tokenStats['exceeds_limit'];
+        return $tokenStats->exceedsLimit;
     }
 
     private function buildResult(
+        string $repositoryUrl,
         array $content, 
-        array $tokenStats, 
-        ?array $chunks, 
-        array $options
-    ): array {
-        $result = [
-            'repository_url' => $options['repository_url'] ?? 'unknown',
-            'processed_at' => now()->toISOString(),
-            'statistics' => $tokenStats,
-            'content' => $content,
-        ];
+        TokenStatistics $tokenStats, 
+        ?Collection $chunks, 
+        array $options,
+        bool $wasOptimized = false,
+        float $startTime = 0.0
+    ): ProcessingResult {
+        $processingTime = $startTime > 0 ? microtime(true) - $startTime : 0.0;
+        
+        $metadata = ProcessingMetadata::create(
+            processingOptions: $options,
+            packageVersion: $this->getPackageVersion(),
+            processingTime: $processingTime,
+        );
 
-        if ($chunks !== null) {
-            $result['chunks'] = $chunks;
-            $result['chunked'] = true;
-            $result['chunk_count'] = count($chunks);
-        } else {
-            $result['chunked'] = false;
-        }
-
-        // Add metadata
-        $result['metadata'] = [
-            'processing_options' => $options,
-            'package_version' => $this->getPackageVersion(),
-            'processing_time' => $this->getProcessingTime(),
-        ];
-
-        return $result;
+        return ProcessingResult::create(
+            repositoryUrl: $repositoryUrl,
+            content: $content,
+            statistics: $tokenStats,
+            metadata: $metadata,
+            wasOptimized: $wasOptimized,
+            chunks: $chunks,
+        );
     }
 
     private function processOptions(array $options): array
