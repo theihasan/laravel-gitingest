@@ -2,9 +2,9 @@
 
 namespace Ihasan\LaravelGitingest\Tests;
 
+use Ihasan\LaravelGitingest\LaravelGitingestServiceProvider;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Orchestra\Testbench\TestCase as Orchestra;
-use Ihasan\LaravelGitingest\LaravelGitingestServiceProvider;
 
 class TestCase extends Orchestra
 {

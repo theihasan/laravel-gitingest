@@ -2,9 +2,9 @@
 
 namespace Ihasan\LaravelGitingest;
 
+use Ihasan\LaravelGitingest\Commands\LaravelGitingestCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use Ihasan\LaravelGitingest\Commands\LaravelGitingestCommand;
 
 class LaravelGitingestServiceProvider extends PackageServiceProvider
 {
