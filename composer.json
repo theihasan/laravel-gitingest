@@ -1,17 +1,17 @@
 {
-    "name": ":vendor_slug/:package_slug",
-    "description": ":package_description",
+    "name": "theihasan/laravel-gitingest",
+    "description": "Convert GitHub repositories into LLM-friendly text files into your Laravel applications",
     "keywords": [
-        ":vendor_name",
+        "Ihasan",
         "laravel",
-        ":package_slug"
+        "laravel-gitingest"
     ],
-    "homepage": "https://github.com/:vendor_slug/:package_slug",
+    "homepage": "https://github.com/theihasan/laravel-gitingest",
     "license": "MIT",
     "authors": [
         {
-            "name": ":author_name",
-            "email": "author@domain.com",
+            "name": "Md Abul Hassan",
+            "email": "imabulhasan99@gmail.com",
             "role": "Developer"
         }
     ],
@@ -35,13 +35,13 @@
     },
     "autoload": {
         "psr-4": {
-            "VendorName\\Skeleton\\": "src/",
-            "VendorName\\Skeleton\\Database\\Factories\\": "database/factories/"
+            "Ihasan\\LaravelGitingest\\": "src/",
+            "Ihasan\\LaravelGitingest\\Database\\Factories\\": "database/factories/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "VendorName\\Skeleton\\Tests\\": "tests/",
+            "Ihasan\\LaravelGitingest\\Tests\\": "tests/",
             "Workbench\\App\\": "workbench/app/"
         }
     },
@@ -63,10 +63,10 @@
     "extra": {
         "laravel": {
             "providers": [
-                "VendorName\\Skeleton\\SkeletonServiceProvider"
+                "Ihasan\\LaravelGitingest\\LaravelGitingestServiceProvider"
             ],
             "aliases": {
-                "Skeleton": "VendorName\\Skeleton\\Facades\\Skeleton"
+                "LaravelGitingest": "Ihasan\\LaravelGitingest\\Facades\\LaravelGitingest"
             }
         }
     },

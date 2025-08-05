@@ -1,12 +1,12 @@
 <?php
 
-namespace VendorName\Skeleton\Commands;
+namespace Ihasan\LaravelGitingest\Commands;
 
 use Illuminate\Console\Command;
 
-class SkeletonCommand extends Command
+class LaravelGitingestCommand extends Command
 {
-    public $signature = 'skeleton';
+    public $signature = 'laravel-gitingest';
 
     public $description = 'My command';
 
