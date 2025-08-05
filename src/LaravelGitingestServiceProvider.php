@@ -7,6 +7,7 @@ namespace Ihasan\LaravelGitingest;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 use Ihasan\LaravelGitingest\Commands\GitIngestCommand;
+use Ihasan\LaravelGitingest\Commands\AnalyzeRepositoryCommand;
 use Ihasan\LaravelGitingest\Services\GitIngestService;
 use Ihasan\LaravelGitingest\Services\Downloaders\PublicRepositoryDownloader;
 use Ihasan\LaravelGitingest\Services\Downloaders\PrivateRepositoryDownloader;
@@ -28,7 +29,10 @@ final class LaravelGitingestServiceProvider extends PackageServiceProvider
         $package
             ->name('laravel-gitingest')
             ->hasConfigFile()
-            ->hasCommand(GitIngestCommand::class);
+            ->hasCommands([
+                GitIngestCommand::class,
+                AnalyzeRepositoryCommand::class,
+            ]);
     }
 
     public function packageRegistered(): void
