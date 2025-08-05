@@ -8,6 +8,8 @@ use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 use Ihasan\LaravelGitingest\Commands\GitIngestCommand;
 use Ihasan\LaravelGitingest\Commands\AnalyzeRepositoryCommand;
+use Ihasan\LaravelGitingest\Commands\SetupCommand;
+use Ihasan\LaravelGitingest\Commands\DoctorCommand;
 use Ihasan\LaravelGitingest\Services\GitIngestService;
 use Ihasan\LaravelGitingest\Services\Downloaders\PublicRepositoryDownloader;
 use Ihasan\LaravelGitingest\Services\Downloaders\PrivateRepositoryDownloader;
@@ -32,6 +34,8 @@ final class LaravelGitingestServiceProvider extends PackageServiceProvider
             ->hasCommands([
                 GitIngestCommand::class,
                 AnalyzeRepositoryCommand::class,
+                SetupCommand::class,
+                DoctorCommand::class,
             ]);
     }
 
